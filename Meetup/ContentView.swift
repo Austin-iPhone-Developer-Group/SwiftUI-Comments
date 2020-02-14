@@ -1,19 +1,36 @@
 import SwiftUI
+import Combine
 
 let url = URL(string: "https://jsonplaceholder.typicode.com/comments")!
 
 struct Comment: Identifiable, Codable {
-    var id: Int
+    let id: Int
     let email: String
     let body: String
 }
 
+class ViewModel: ObservableObject {
+    
+   @Published var comments = [Comment]()
+    var binding: AnyCancellable?
+    
+    init() {
+        binding = URLSession.shared.dataTaskPublisher(for: url)
+        .map { $0.data }
+        .decode(type: [Comment].self, decoder: JSONDecoder())
+        .assertNoFailure()
+        .receive(on: DispatchQueue.main)
+        .assign(to: \.comments, on: self)
+    }
+    
+}
+
 struct ContentView: View {
     
-    @State var comments = [Comment]()
-    
+    @ObservedObject var viewModel = ViewModel()
+        
     var body: some View {
-        List(comments, rowContent: { comment in
+        List(viewModel.comments, rowContent: { comment in
             VStack {
                 HStack {
                     Text("\(comment.id)")
@@ -22,19 +39,7 @@ struct ContentView: View {
                 }
                 Text(comment.body)
             }
-        }).onAppear(perform: {
-            self.downloadComments(completion: { self.comments = $0 })
         })
-    }
-    
-    func downloadComments(completion: @escaping ([Comment]) -> Void) {
-        let task = URLSession.shared.dataTask(with: url, completionHandler: { data, _, _ in
-            guard let data = data else { return }
-            guard let comments = try? JSONDecoder().decode([Comment].self, from: data) else { return }
-            completion(comments)
-            
-        })
-        task.resume()
     }
     
 }
